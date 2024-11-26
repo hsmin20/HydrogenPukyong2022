@@ -16,34 +16,9 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QDesktopWidget, QAction, 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 import time
+from sklearn.metrics import r2_score
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-
-def R_squared(y, y_pred):
-    MAX_LINE = 8185
-    total_len = len(y)
-    no_of_loop = (int)(total_len / MAX_LINE)
-
-    resi = 0.0
-    tota = 0.0
-    for i in range(no_of_loop):
-        start_index = i * MAX_LINE
-        y_sub = y[start_index:start_index+MAX_LINE]
-        y_pred_sub = y_pred[start_index:start_index+MAX_LINE]
-
-        residual = tf.reduce_sum(tf.square(tf.subtract(y_sub, y_pred_sub)))
-        total = tf.reduce_sum(tf.square(tf.subtract(y_sub, tf.reduce_mean(y_sub))))
-        # r2_sub = tf.subtract(1.0, tf.divide(residual, total))
-
-        resi += residual.numpy()
-        tota += total.numpy()
-
-    if tota == 0:
-        r2 = 0
-    else:
-        r2 = 1.0 - (resi / tota)
-
-    return r2
 
 class PukyongMachineLearner:
     def __init__(self):
@@ -54,7 +29,7 @@ class PukyongMachineLearner:
         self.epoch = epoch
         self.learningRate = learningRate
         self.splitPercentage = splitPercentage
-        self.windowSize = int(windowSize)
+        self.windowSize = windowSize
         self.earlyStopping = earlyStopping
         self.verbose = verb
         self.callback = callback
@@ -64,21 +39,21 @@ class PukyongMachineLearner:
     def isModelLoaded(self):
         return self.modelLoaded
 
-    def fit(self, x_data, y_data):
-        _callbacks = [self.callback]
-        if self.earlyStopping == True:
-            early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=500)
-            _callbacks.append(early_stopping)
-
-        if self.splitPercentage > 0:
-            training_history = self.model.fit(x_data, y_data, batch_size=self.batchSize, epochs=self.epoch,
-                                              validation_split=self.splitPercentage, verbose=self.verbose,
-                                              callbacks=[self.callback])
-        else:
-            training_history = self.model.fit(x_data, y_data, batch_size=self.batchSize, epochs=self.epoch,
-                                              verbose=self.verbose, callbacks=_callbacks)
-
-        return training_history
+    # def fit(self, x_data, y_data):
+    #     _callbacks = [self.callback]
+    #     if self.earlyStopping == True:
+    #         early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=500)
+    #         _callbacks.append(early_stopping)
+    #
+    #     if self.splitPercentage > 0:
+    #         training_history = self.model.fit(x_data, y_data, batch_size=self.batchSize, epochs=self.epoch,
+    #                                           validation_split=self.splitPercentage, verbose=self.verbose,
+    #                                           callbacks=[self.callback])
+    #     else:
+    #         training_history = self.model.fit(x_data, y_data, batch_size=self.batchSize, epochs=self.epoch,
+    #                                           verbose=self.verbose, callbacks=_callbacks)
+    #
+    #     return training_history
 
     def fitWithValidation(self, x_train_data, y_train_data, x_valid_data, y_valid_data):
         _callbacks = [self.callback]
@@ -158,24 +133,18 @@ class PukyongMachineLearner:
 
         plt.show()
 
-    def showResultValid(self, y_data, training_history, y_predicted, y_train_data, y_train_pred,
-                                          y_valid_data, y_valid_pred, sensor_name, height):
-        r2All = R_squared(y_data, y_predicted)
-        r2Train = R_squared(y_train_data, y_train_pred)
-        r2Valid = R_squared(y_valid_data, y_valid_pred)
-
-        r2AllValue = r2All#.numpy()
-        r2TrainValue = r2Train#.numpy()
-        r2ValidValue = r2Valid#.numpy()
+    def showResultValid(self, training_history, y_train_data, y_train_pred, y_valid_data, y_valid_pred,
+                        y_test_data, y_test_pred):
+        r2Train = r2_score(y_train_data, y_train_pred)
+        r2Valid = r2_score(y_valid_data, y_valid_pred)
+        if len(y_test_data) > 0:
+            r2Test = r2_score(y_test_data, y_test_pred)
+        else:
+            r2Test = 0
 
         fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-        title = sensor_name + height
+        title = 'Sensors' + 'Height'
         fig.suptitle(title)
-
-        datasize = len(y_data)
-        x_display = np.zeros((datasize, 1))
-        for j in range(datasize):
-            x_display[j][0] = j
 
         datasize = len(y_train_data)
         x_display2 = np.zeros((datasize, 1))
@@ -187,27 +156,32 @@ class PukyongMachineLearner:
         for j in range(datasize):
             x_display3[j][0] = j
 
-        axs[0, 0].scatter(x_display, y_data, color="red", s=1)
-        axs[0, 0].plot(x_display, y_predicted, color='blue')
-        title = f'All Data (R2 = {r2AllValue})'
+        datasize = len(y_test_data)
+        x_display = np.zeros((datasize, 1))
+        for j in range(datasize):
+            x_display[j][0] = j
+
+        axs[0, 0].scatter(x_display2, y_train_data, color="red", s=1)
+        axs[0, 0].scatter(x_display2, y_train_pred, color='blue', s=1)
+        title = f'Train Data (R2 = {r2Train})'
         axs[0, 0].set_title(title)
         axs[0, 0].grid()
 
-        lossarray = training_history.history['loss']
-        axs[0, 1].plot(lossarray, label='Loss')
-        axs[0, 1].set_title('Loss')
+        axs[0, 1].scatter(x_display3, y_valid_data, color="red", s=1)
+        axs[0, 1].scatter(x_display3, y_valid_pred, color='blue', s=1)
+        title = f'Validation Data (R2 = {r2Valid})'
+        axs[0, 1].set_title(title)
         axs[0, 1].grid()
 
-        axs[1, 0].scatter(x_display2, y_train_data, color="red", s=1)
-        axs[1, 0].scatter(x_display2, y_train_pred, color='blue', s=1)
-        title = f'Train Data (R2 = {r2TrainValue})'
+        axs[1, 0].scatter(x_display, y_test_data, color="red", s=1)
+        axs[1, 0].plot(x_display, y_test_pred, color='blue')
+        title = f'Test Data (R2 = {r2Test})'
         axs[1, 0].set_title(title)
         axs[1, 0].grid()
 
-        axs[1, 1].scatter(x_display3, y_valid_data, color="red", s=1)
-        axs[1, 1].scatter(x_display3, y_valid_pred, color='blue', s=1)
-        title = f'Validation Data (R2 = {r2ValidValue})'
-        axs[1, 1].set_title(title)
+        lossarray = training_history.history['loss']
+        axs[1, 1].plot(lossarray, label='Loss')
+        axs[1, 1].set_title('Loss')
         axs[1, 1].grid()
 
         plt.show()
@@ -544,7 +518,7 @@ class PukyongMLWindow(QMainWindow):
         self.editBatch.setFixedWidth(100)
         epochLabel = QLabel('Epoch')
         epochLabel.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.editEpoch = QLineEdit('20')
+        self.editEpoch = QLineEdit('100')
         self.editEpoch.setFixedWidth(100)
         lrLabel = QLabel('Learning Rate')
         lrLabel.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -575,6 +549,7 @@ class PukyongMLWindow(QMainWindow):
         self.cbMinMax = QCheckBox('Use Min/Max of  All data')
         self.cbMinMax.setChecked(True)
         self.cbValidData = QCheckBox('Use Partially checked  sensors as validation')
+        self.cbValidData.setChecked(True)
         self.cbValidData.stateChanged.connect(self.validDataClicked)
         self.epochPbar = QProgressBar()
 
@@ -608,7 +583,7 @@ class PukyongMLWindow(QMainWindow):
         layout = QGridLayout()
 
         mlWithDataBtn = QPushButton('ML with Data')
-        mlWithDataBtn.clicked.connect(self.doMachineLearningWithData)
+        mlWithDataBtn.clicked.connect(self.doMachineLearning)
         self.cbResume = QCheckBox('Resume Learning')
         # self.cbResume.setChecked(True)
         saveModelBtn = QPushButton('Save Model')
@@ -1221,7 +1196,7 @@ class PukyongMLWindow(QMainWindow):
 
         return sensorName, data
 
-    def _prepareForMachineLearning(self, windowSize):
+    def _prepareForMachineLearning(self):
         heightList_n, distList_n = self._normalize()
 
         # separate data to train & validation
@@ -1234,9 +1209,9 @@ class PukyongMLWindow(QMainWindow):
             else:
                 barrierPositionList[i] *= multiplier
 
-        trainArray2m, trainIndex2m, validArray2m, validIndex2m = self.getArrayFromSensors2m()
-        trainArray5m, trainIndex5m, validArray5m, validIndex5m = self.getArrayFromSensors5m()
-        trainArray8m, trainIndex8m, validArray8m, validIndex8m = self.getArrayFromSensors8m()
+        trainArray2m, trainIndex2m, testArray2m, testIndex2m = self.getArrayFromSensors2m()
+        trainArray5m, trainIndex5m, testArray5m, testIndex5m = self.getArrayFromSensors5m()
+        trainArray8m, trainIndex8m, testArray8m, testIndex8m = self.getArrayFromSensors8m()
 
         trainArray = trainArray2m + trainArray5m + trainArray8m
         trainIndex = trainIndex2m + trainIndex5m + trainIndex8m
@@ -1248,12 +1223,25 @@ class PukyongMLWindow(QMainWindow):
         for i in range(len(trainArray8m)):
             trainBarrierPos.append(barrierPositionList[2])
 
+        testArray = testArray2m + testArray5m + testArray8m
+        testIndex = testIndex2m + testIndex5m + testIndex8m
+        testBarrierPos = []
+        for i in range(len(testArray2m)):
+            testBarrierPos.append(barrierPositionList[0])
+        for i in range(len(testArray5m)):
+            testBarrierPos.append(barrierPositionList[1])
+        for i in range(len(testArray8m)):
+            testBarrierPos.append(barrierPositionList[2])
+
         if len(trainArray) == 0:
             QMessageBox.warning(self, 'warning', 'No Training Data!')
             return
 
-        x_train_data = []
-        y_train_data = []
+        x_trainValid_data = []
+        y_trainValid_data = []
+
+        x_test_data = []
+        y_test_data = []
 
         # get maxp/minp from all of the training data
         maxp = -1000000
@@ -1262,6 +1250,8 @@ class PukyongMLWindow(QMainWindow):
             maxp, minp = self.getMinMaxPresssureOfAllData()
         else:
             maxp, minp = self.getMinMaxPressureOfLoadedData(trainArray)
+
+        windowSize = int(self.editWidSize.text())
 
         for i in range(len(trainArray)):
             index_ij = trainIndex[i]
@@ -1281,38 +1271,16 @@ class PukyongMLWindow(QMainWindow):
                     x_data[k][4] = (s_data[j + k] - minp) / (maxp - minp)
                 y_data = (s_data[j + windowSize] - minp) / (maxp - minp)
 
-                x_train_data.append(x_data)
-                y_train_data.append(y_data)
+                x_trainValid_data.append(x_data)
+                y_trainValid_data.append(y_data)
 
-        return np.array(x_train_data), np.array(y_train_data)
-
-    def _prepareForMachineLearningSKLearn(self, windowSize, splitPecentage):
-        heightList_n, distList_n = self._normalize()
-
-        allArray, allIndex, barrierPosList = self.getAllArray()
-
-        if len(allArray) == 0:
-            QMessageBox.warning(self, 'warning', 'No Training Data!')
-            return
-
-        x_all_data = []
-        y_all_data = []
-
-        # get maxp/minp from all of the training data
-        maxp = -1000000
-        minp = 100000
-        if self.cbMinMax.isChecked() == True:
-            maxp, minp = self.getMinMaxPresssureOfAllData()
-        else:
-            maxp, minp = self.getMinMaxPressureOfLoadedData(allArray)
-
-        for i in range(len(allArray)):
-            index_ij = allIndex[i]
+        for i in range(len(testArray)):
+            index_ij = testIndex[i]
             height = heightList_n[index_ij[0]]
             dist = distList_n[index_ij[1]]
 
-            s_data = allArray[i]
-            barrierPos = barrierPosList[i]
+            s_data = testArray[i]
+            barrierPos = testBarrierPos[i]
 
             for j in range(self.NUM_DATA - windowSize):
                 x_data = np.zeros((windowSize, self.N_FEATURE))
@@ -1323,141 +1291,17 @@ class PukyongMLWindow(QMainWindow):
                     x_data[k][3] = barrierPos
                     x_data[k][4] = (s_data[j + k] - minp) / (maxp - minp)
                 y_data = (s_data[j + windowSize] - minp) / (maxp - minp)
-                y_data_arr = []
-                y_data_arr.append(y_data)
-                x_all_data.append(x_data)
-                y_all_data.append(y_data_arr)
 
-        x_train_data, x_valid_data, y_train_data, y_valid_data = train_test_split(x_all_data, y_all_data,
-                                                                                  test_size=splitPecentage,
+                x_test_data.append(x_data)
+                y_test_data.append(y_data)
+
+        splitPercentage = float(self.editSplit.text())
+        x_train_data, x_valid_data, y_train_data, y_valid_data = train_test_split(x_trainValid_data, y_trainValid_data,
+                                                                                  test_size=splitPercentage,
                                                                                   random_state=42)
 
-        return np.array(x_all_data), np.array(y_all_data), np.array(x_train_data), np.array(y_train_data), \
-            np.array(x_valid_data), np.array(y_valid_data)
-
-    def _prepareForMachineLearningManually(self, windowSize):
-        heightList_n, distList_n = self._normalize()
-
-        # separate data to train & validation
-        barrierPositionList = [ 2, 5, 8 ]
-        # Normalized check
-        multiplier = float(self.editMultiplier.text())
-        for i in range(3):
-            if multiplier < 0.1:
-                barrierPositionList[i] = (barrierPositionList[i] - 2) / 6
-            else:
-                barrierPositionList[i] *= multiplier
-
-        trainArray2m, trainIndex2m, validArray2m, validIndex2m = self.getArrayFromSensors2m()
-        trainArray5m, trainIndex5m, validArray5m, validIndex5m = self.getArrayFromSensors5m()
-        trainArray8m, trainIndex8m, validArray8m, validIndex8m = self.getArrayFromSensors8m()
-
-        trainArray = trainArray2m + trainArray5m + trainArray8m
-        trainIndex = trainIndex2m + trainIndex5m + trainIndex8m
-        trainBarrierPos = []
-        for i in range(len(trainArray2m)):
-            trainBarrierPos.append(barrierPositionList[0])
-        for i in range(len(trainArray5m)):
-            trainBarrierPos.append(barrierPositionList[1])
-        for i in range(len(trainArray8m)):
-            trainBarrierPos.append(barrierPositionList[2])
-
-        validArray = validArray2m + validArray5m + validArray8m
-        validIndex = validIndex2m + validIndex5m + validIndex8m
-        validBarrierPos = []
-        for i in range(len(validArray2m)):
-            validBarrierPos.append(barrierPositionList[0])
-        for i in range(len(validArray5m)):
-            validBarrierPos.append(barrierPositionList[1])
-        for i in range(len(validArray8m)):
-            validBarrierPos.append(barrierPositionList[2])
-
-        if len(trainArray) == 0:
-            QMessageBox.warning(self, 'warning', 'No Training Data!')
-            return
-
-        x_train_data = []
-        y_train_data = []
-
-        x_valid_data = []
-        y_valid_data = []
-
-        # get maxp/minp from all of the training data
-        maxp = -1000000
-        minp = 100000
-        if self.cbMinMax.isChecked() == True:
-            maxp, minp = self.getMinMaxPresssureOfAllData()
-        else:
-            maxp, minp = self.getMinMaxPressureOfLoadedData(trainArray)
-
-        for i in range(len(trainArray)):
-            index_ij = trainIndex[i]
-            height = heightList_n[index_ij[0]]
-            dist = distList_n[index_ij[1]]
-
-            s_data = trainArray[i]
-            barrierPos = trainBarrierPos[i]
-
-            for j in range(self.NUM_DATA - windowSize):
-                x_data = np.zeros((windowSize, self.N_FEATURE))
-                for k in range(windowSize):
-                    x_data[k][0] = self.time_data_norm[j + k]
-                    x_data[k][1] = height
-                    x_data[k][2] = dist
-                    x_data[k][3] = barrierPos
-                    x_data[k][4] = (s_data[j + k] - minp) / (maxp - minp)
-                y_data = (s_data[j + windowSize] - minp) / (maxp - minp)
-
-                x_train_data.append(x_data)
-                y_train_data.append(y_data)
-
-        for i in range(len(validArray)):
-            index_ij = validIndex[i]
-            s_data = validArray[i]
-            barrierPos = validBarrierPos[i]
-
-            for j in range(self.NUM_DATA - windowSize):
-                x_data = np.zeros((windowSize, self.N_FEATURE))
-                for k in range(windowSize):
-                    x_data[k][0] = self.time_data_norm[j + k]
-                    x_data[k][1] = height
-                    x_data[k][2] = dist
-                    x_data[k][3] = barrierPos
-                    x_data[k][4] = (s_data[j + k] - minp) / (maxp - minp)
-                y_data = (s_data[j + windowSize] - minp) / (maxp - minp)
-
-                x_valid_data.append(x_data)
-                y_valid_data.append(y_data)
-
-        allArray, allIndex, barrierPosList = self.getAllArray()
-
-        if len(allArray) == 0:
-            QMessageBox.warning(self, 'warning', 'No Training Data!')
-            return
-
-        x_all_data = []
-        y_all_data = []
-
-        for i in range(len(allArray)):
-            index_ij = allIndex[i]
-            s_data = allArray[i]
-            barrierPos = barrierPosList[i]
-
-            for j in range(self.NUM_DATA - windowSize):
-                x_data = np.zeros((windowSize, self.N_FEATURE))
-                for k in range(windowSize):
-                    x_data[k][0] = self.time_data_norm[j + k]
-                    x_data[k][1] = height
-                    x_data[k][2] = dist
-                    x_data[k][3] = barrierPos
-                    x_data[k][4] = (s_data[j + k] - minp) / (maxp - minp)
-                y_data = (s_data[j + windowSize] - minp) / (maxp - minp)
-
-                x_all_data.append(x_data)
-                y_all_data.append(y_data)
-
-        return np.array(x_all_data), np.array(y_all_data), np.array(x_train_data), np.array(y_train_data), \
-            np.array(x_valid_data), np.array(y_valid_data)
+        return np.array(x_train_data), np.array(y_train_data), np.array(x_valid_data), np.array(y_valid_data), \
+            np.array(x_test_data), np.array(y_test_data)
 
     def getMinMaxPresssureOfAllData(self):
         maxPressure = -100000
@@ -1492,50 +1336,23 @@ class PukyongMLWindow(QMainWindow):
 
         return maxPressure, minPressure
 
-    def doMachineLearningWithData(self):
+    def doMachineLearning(self):
         if (not self.indexijs2m and not self.indexijs5m and not self.indexijs8m) or \
                 (not self.southSensors2m and not self.southSensors5m and not self.southSensors8m):
             QMessageBox.about(self, 'Warining', 'Load Data First')
             return
 
-        batchSize = int(self.editBatch.text())
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
         epoch = int(self.editEpoch.text())
         if epoch < 1:
             QMessageBox.warning(self, 'warning', 'Epoch shall be greater than 0')
             return
 
-        splitPercentage = float(self.editSplit.text())
-        if splitPercentage < 0 or splitPercentage > 1.0:
-            QMessageBox.warning(self, 'warning', 'splitPercentage shall be between 0 and 1')
-            return
+        x_train_data, y_train_data, x_valid_data, y_valid_data, x_test_data, y_test_data = \
+            self._prepareForMachineLearning()
 
-        windowSize = int(self.editWidSize.text())
-
-        learningRate = float(self.editLR.text())
-        verbose = self.cbVerbose.isChecked()
-
-        splitPercentage = float(self.editSplit.text())
-        useSKLearn = self.cbSKLearn.isChecked()
-        earlyStopping = self.cbEarlyStop.isChecked()
-        useValidation = self.cbValidData.isChecked()
-
-        if useValidation:
-            x_all_data, y_all_data, x_train_data, y_train_data, x_valid_data, y_valid_data = \
-                self._prepareForMachineLearningManually(windowSize)
-        else:
-            if splitPercentage > 0.0 and useSKLearn:
-                x_all_data, y_all_data, x_train_data, y_train_data, x_valid_data, y_valid_data = \
-                    self._prepareForMachineLearningSKLearn(windowSize, splitPercentage)
-            else:
-                x_train_data, y_train_data = self._prepareForMachineLearning(windowSize)
-
-        if useValidation or (splitPercentage > 0.0 and useSKLearn):
-            self.doMachineLearningWithValidation(x_all_data, y_all_data, x_train_data, y_train_data, x_valid_data,
-                                                 y_valid_data, batchSize, epoch, learningRate, splitPercentage,
-                                                 windowSize, earlyStopping, verbose)
-        else:
-            self.doMachineLearning(x_train_data, y_train_data, batchSize, epoch, learningRate, splitPercentage,
-                                   windowSize, earlyStopping, verbose)
+        self._doMachineLearning(x_train_data, y_train_data, x_valid_data, y_valid_data, x_test_data, y_test_data)
 
         QApplication.restoreOverrideCursor()
 
@@ -1701,7 +1518,8 @@ class PukyongMLWindow(QMainWindow):
                 y_predicted = self.modelLearner.predict(x_input)
 
                 p_predicted = y_predicted[0][0]
-                y_pred.append(p_predicted)
+                p_unnormalized = p_predicted * (maxp - minp) + minp
+                y_pred.append(p_unnormalized)
 
                 x_data.pop(0)
                 x_data.append(x_data[-1].copy())
@@ -1717,15 +1535,37 @@ class PukyongMLWindow(QMainWindow):
 
         print("--- %s seconds ---" % (time.time() - start_time))
 
+        self._drawCheckValGraph(y_data, y_pred)
+
+        # datasize = len(y_data)
+        # x_display = np.zeros((datasize, 1))
+        # for j in range(datasize):
+        #     x_display[j][0] = j
+        #
+        # # y_data = (y_data - minp) / (maxp - minp)
+        # # y_pred = [(maxp - minp) * x for x in y_pred] + minp
+        #
+        # r2All = R_squared(y_data, y_pred)
+        # title = f'LSTM Validation (R2 = {r2All})'
+        #
+        # plt.figure()
+        # plt.scatter(x_display, y_data, label='original data', color="red", s=1)
+        # plt.scatter(x_display, y_pred, label='predicted', color="blue", s=1)
+        # plt.title(title)
+        # plt.xlabel('time (ms)')
+        # plt.ylabel('pressure (kPa)')
+        # plt.legend(loc='upper right')
+        # plt.grid()
+        #
+        # plt.show()
+
+    def _drawCheckValGraph(self, y_data, y_pred):
         datasize = len(y_data)
         x_display = np.zeros((datasize, 1))
         for j in range(datasize):
             x_display[j][0] = j
 
-        # y_data = (y_data - minp) / (maxp - minp)
-        # y_pred = [(maxp - minp) * x for x in y_pred] + minp
-
-        r2All = R_squared(y_data, y_pred)
+        r2All = r2_score(y_data, y_pred)
         title = f'LSTM Validation (R2 = {r2All})'
 
         plt.figure()
@@ -2132,8 +1972,8 @@ class PukyongMLWindow(QMainWindow):
         # separate data to train & validation
         trainArray = []
         trainIndex = []
-        validArray = []
-        validIndex = []
+        testArray = []
+        testIndex = []
 
         useValidation = self.cbValidData.isChecked()
         if useValidation:
@@ -2144,8 +1984,8 @@ class PukyongMLWindow(QMainWindow):
                 one_data = self.southSensors2m[i]
 
                 if self.cbArray2m[row_num][col_num].checkState() == Qt.PartiallyChecked:
-                    validArray.append(one_data)
-                    validIndex.append(indexij)
+                    testArray.append(one_data)
+                    testIndex.append(indexij)
                 elif self.cbArray2m[row_num][col_num].checkState() == Qt.Checked:
                     trainArray.append(one_data)
                     trainIndex.append(indexij)
@@ -2158,7 +1998,7 @@ class PukyongMLWindow(QMainWindow):
                 trainArray.append(one_data)
                 trainIndex.append(indexij)
 
-        return trainArray, trainIndex, validArray, validIndex
+        return trainArray, trainIndex, testArray, testIndex
 
     def getArrayFromSensors5m(self):
         numSensors = len(self.southSensors5m)
@@ -2166,8 +2006,8 @@ class PukyongMLWindow(QMainWindow):
         # separate data to train & validation
         trainArray = []
         trainIndex = []
-        validArray = []
-        validIndex = []
+        testArray = []
+        testIndex = []
 
         useValidation = self.cbValidData.isChecked()
         if useValidation:
@@ -2178,8 +2018,8 @@ class PukyongMLWindow(QMainWindow):
                 one_data = self.southSensors5m[i]
 
                 if self.cbArray5m[row_num][col_num].checkState() == Qt.PartiallyChecked:
-                    validArray.append(one_data)
-                    validIndex.append(indexij)
+                    testArray.append(one_data)
+                    testIndex.append(indexij)
                 elif self.cbArray5m[row_num][col_num].checkState() == Qt.Checked:
                     trainArray.append(one_data)
                     trainIndex.append(indexij)
@@ -2192,7 +2032,7 @@ class PukyongMLWindow(QMainWindow):
                 trainArray.append(one_data)
                 trainIndex.append(indexij)
 
-        return trainArray, trainIndex, validArray, validIndex
+        return trainArray, trainIndex, testArray, testIndex
 
     def getArrayFromSensors8m(self):
         numSensors = len(self.southSensors8m)
@@ -2200,8 +2040,8 @@ class PukyongMLWindow(QMainWindow):
         # separate data to train & validation
         trainArray = []
         trainIndex = []
-        validArray = []
-        validIndex = []
+        testArray = []
+        testIndex = []
 
         useValidation = self.cbValidData.isChecked()
         if useValidation:
@@ -2212,8 +2052,8 @@ class PukyongMLWindow(QMainWindow):
                 one_data = self.southSensors8m[i]
 
                 if self.cbArray8m[row_num][col_num].checkState() == Qt.PartiallyChecked:
-                    validArray.append(one_data)
-                    validIndex.append(indexij)
+                    testArray.append(one_data)
+                    testIndex.append(indexij)
                 elif self.cbArray8m[row_num][col_num].checkState() == Qt.Checked:
                     trainArray.append(one_data)
                     trainIndex.append(indexij)
@@ -2226,7 +2066,7 @@ class PukyongMLWindow(QMainWindow):
                 trainArray.append(one_data)
                 trainIndex.append(indexij)
 
-        return trainArray, trainIndex, validArray, validIndex
+        return trainArray, trainIndex, testArray, testIndex
 
     def _normalize(self):
         heightList_n = np.copy(self.heightList)
@@ -2243,23 +2083,15 @@ class PukyongMLWindow(QMainWindow):
 
         return heightList_n, distList_n
 
-    def doMachineLearning(self, x_data, y_data, batchSize, epoch, learningRate, splitPercentage, windowSize,
-                          earlyStopping, verb):
-        self.epochPbar.setMaximum(epoch)
+    def _doMachineLearning(self, x_train_data, y_train_data, x_valid_data, y_valid_data, x_test_data, y_test_data):
+        epoch = int(self.editEpoch.text())
+        batchSize = int(self.editBatch.text())
+        learningRate = float(self.editLR.text())
+        splitPercentage = float(self.editSplit.text())
+        windowSize = int(self.editWidSize.text())
+        earlyStopping = self.cbEarlyStop.isChecked()
+        verb = self.cbVerbose.isChecked()
 
-        if self.cbResume.isChecked() == False or self.modelLearner.modelLoaded == False:
-            nnList = self.getNNLayer()
-            self.modelLearner.set(nnList, batchSize, epoch, learningRate, splitPercentage, windowSize, earlyStopping,
-                                  verb, TfCallback(self.epochPbar))
-
-        training_history = self.modelLearner.fit(x_data, y_data)
-
-        y_predicted = self.modelLearner.predict(x_data)
-        self.modelLearner.showResult(y_data, training_history, y_predicted, 'Sensors', 'Height')
-
-    def doMachineLearningWithValidation(self, x_all_data, y_all_data, x_train_data, y_train_data, x_valid_data,
-                                        y_valid_data, batchSize, epoch, learningRate, splitPercentage, windowSize,
-                                        earlyStopping, verb):
         self.epochPbar.setMaximum(epoch)
 
         if self.cbResume.isChecked() == False or self.modelLearner.modelLoaded == False:
@@ -2269,12 +2101,15 @@ class PukyongMLWindow(QMainWindow):
 
         training_history = self.modelLearner.fitWithValidation(x_train_data, y_train_data, x_valid_data, y_valid_data)
 
-        y_predicted = self.modelLearner.predict(x_all_data)
         y_train_pred = self.modelLearner.predict(x_train_data)
         y_valid_pred = self.modelLearner.predict(x_valid_data)
+        if len(x_test_data) > 0:
+            y_test_pred = self.modelLearner.predict(x_test_data)
+        else:
+            y_test_pred = []
 
-        self.modelLearner.showResultValid(y_all_data, training_history, y_predicted, y_train_data, y_train_pred,
-                                          y_valid_data, y_valid_pred, 'Sensors', 'Height')
+        self.modelLearner.showResultValid(training_history, y_train_data, y_train_pred,
+                                          y_valid_data, y_valid_pred, y_test_data, y_test_pred)
 
     def center(self):
         qr = self.frameGeometry()
