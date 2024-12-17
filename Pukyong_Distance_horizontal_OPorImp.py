@@ -10,7 +10,7 @@ import tensorflowjs as tfjs
 from PyQt5.QtWidgets import QApplication, QMainWindow, QDesktopWidget, QAction, QFileDialog, \
     QVBoxLayout, QWidget, QPushButton, QGridLayout, QLabel, QInputDialog, \
     QLineEdit, QComboBox, QMessageBox, QCheckBox, QProgressBar, QHBoxLayout, QTableWidget, QTableWidgetItem, \
-    QAbstractItemView, QHeaderView, QDialogButtonBox, QDialog
+    QAbstractItemView, QHeaderView, QDialogButtonBox, QDialog, QRadioButton
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 import time
@@ -133,13 +133,33 @@ class PukyongMachineLearner:
         plt.show()
 
     def showResultValid(self, training_history, y_train_data, y_train_pred, y_valid_data, y_valid_pred,
-                        y_test_data, y_test_pred):
+                        y_test_data, y_test_pred, overpressure):
 
-        r2TrainOp = r2_score(y_train_data, y_train_pred)
-        r2ValidOp = r2_score(y_valid_data, y_valid_pred)
+        y_train_data1 = []
+        y_valid_data1 = []
+        for i in range(len(y_train_data)):
+            if overpressure:
+                y_train_data1.append(y_train_data[i][0])
+            else:
+                y_train_data1.append(y_train_data[i][1])
+        for i in range(len(y_valid_data)):
+            if overpressure:
+                y_valid_data1.append(y_valid_data[i][0])
+            else:
+                y_valid_data1.append(y_valid_data[i][1])
+
+        r2TrainOp = r2_score(y_train_data1, y_train_pred)
+        r2ValidOp = r2_score(y_valid_data1, y_valid_pred)
 
         if len(y_test_data) > 0:
-            r2TestOp = r2_score(y_test_data, y_test_pred)
+            y_test_data1 = []
+            for i in range(len(y_test_data)):
+                if overpressure:
+                    y_test_data1.append(y_test_data[i][0])
+                else:
+                    y_test_data1.append(y_test_data[i][1])
+
+            r2TestOp = r2_score(y_test_data1, y_test_pred)
         else:
             r2TestOp = 0
 
@@ -162,19 +182,19 @@ class PukyongMachineLearner:
         for j in range(datasize):
             x_display_test[j][0] = j
 
-        axs[0, 0].scatter(x_display_train, y_train_data, color="red", s=1)
+        axs[0, 0].scatter(x_display_train, y_train_data1, color="red", s=1)
         axs[0, 0].scatter(x_display_train, y_train_pred, color='blue', s=1)
         title = f'Train Data R2 (Op = {r2TrainOp})'
         axs[0, 0].set_title(title)
         axs[0, 0].grid()
 
-        axs[0, 1].scatter(x_display_valid, y_valid_data, color="red", s=1)
+        axs[0, 1].scatter(x_display_valid, y_valid_data1, color="red", s=1)
         axs[0, 1].scatter(x_display_valid, y_valid_pred, color='blue', s=1)
         title = f'Validation Data R2 (Op = {r2ValidOp})'
         axs[0, 1].set_title(title)
         axs[0, 1].grid()
 
-        axs[1, 0].scatter(x_display_test, y_test_data, color="red", s=1)
+        axs[1, 0].scatter(x_display_test, y_test_data1, color="red", s=1)
         axs[1, 0].scatter(x_display_test, y_test_pred, color='blue', s=1)
         title = f'Test Data R2 (Op = {r2TestOp})'
         axs[1, 0].set_title(title)
@@ -453,6 +473,9 @@ class PukyongMLWindow(QMainWindow):
 
         qcheckboxAll = QCheckBox('Check All')
         qcheckboxAll.stateChanged.connect(self.checkAll)
+        self.radioOp = QRadioButton("Overpressure")
+        self.radioOp.setChecked(True)
+        self.radioImp = QRadioButton("Impulse")
         loadButton = QPushButton('Load Data')
         loadButton.clicked.connect(self.loadData)
         showOverPressureButton = QPushButton('Show Overpressure Graph')
@@ -461,6 +484,8 @@ class PukyongMLWindow(QMainWindow):
         showImpulseButton.clicked.connect(self.showImpulseGraphs)
 
         layout.addWidget(qcheckboxAll)
+        layout.addWidget(self.radioOp)
+        layout.addWidget(self.radioImp)
         layout.addWidget(loadButton)
         layout.addWidget(showOverPressureButton)
         layout.addWidget(showImpulseButton)
@@ -476,7 +501,7 @@ class PukyongMLWindow(QMainWindow):
         self.tableNNWidget.setHorizontalHeaderLabels(['Units', 'Activation'])
 
         # read default layers
-        DEFAULT_LAYER_FILE = 'default3_2.nn'
+        DEFAULT_LAYER_FILE = 'default3_1.nn'
         self.updateNNList(DEFAULT_LAYER_FILE)
 
         self.tableNNWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -1662,8 +1687,10 @@ class PukyongMLWindow(QMainWindow):
         x_data[2] = barrierPos
 
         y_data = np.zeros(1)
-        y_data[0] = op_n
-        y_data[0] = imp_n
+        if self.radioOp.isChecked() == True:
+            y_data[0] = op_n
+        else:
+            y_data[0] = imp_n
 
         return x_data, y_data
 
@@ -1725,6 +1752,7 @@ class PukyongMLWindow(QMainWindow):
         splitPercentage = float(self.editSplit.text())
         earlyStopping = self.cbEarlyStop.isChecked()
         verb = self.cbVerbose.isChecked()
+        bOverpressure = self.radioOp.isChecked()
 
         self.epochPbar.setMaximum(epoch)
 
@@ -1743,7 +1771,7 @@ class PukyongMLWindow(QMainWindow):
             y_test_pred = []
 
         self.modelLearner.showResultValid(training_history, y_train_data, y_train_pred,
-                                          y_valid_data, y_valid_pred, y_test_data, y_test_pred)
+                                          y_valid_data, y_valid_pred, y_test_data, y_test_pred, bOverpressure)
 
     def center(self):
         qr = self.frameGeometry()
