@@ -134,52 +134,14 @@ class PukyongMachineLearner:
 
     def showResultValid(self, training_history, y_train_data, y_train_pred, y_valid_data, y_valid_pred,
                         y_test_data, y_test_pred):
-        y_train_op = []
-        y_train_imp = []
-        for i in range(len(y_train_data)):
-            y_train_op.append(y_train_data[i][0])
-            y_train_imp.append(y_train_data[i][1])
-        y_train_pred_op = []
-        y_train_pred_imp = []
-        for i in range(len(y_train_pred)):
-            y_train_pred_op.append(y_train_pred[i][0])
-            y_train_pred_imp.append(y_train_pred[i][1])
 
-        r2TrainOp = r2_score(y_train_op, y_train_pred_op)
-        r2TrainImp = r2_score(y_train_imp, y_train_pred_imp)
-
-        y_valid_op = []
-        y_valid_imp = []
-        for i in range(len(y_valid_data)):
-            y_valid_op.append(y_valid_data[i][0])
-            y_valid_imp.append(y_valid_data[i][1])
-        y_valid_pred_op = []
-        y_valid_pred_imp = []
-        for i in range(len(y_valid_pred)):
-            y_valid_pred_op.append(y_valid_pred[i][0])
-            y_valid_pred_imp.append(y_valid_pred[i][1])
-
-        r2ValidOp = r2_score(y_valid_op, y_valid_pred_op)
-        r2ValidImp = r2_score(y_valid_imp, y_valid_pred_imp)
-
+        r2TrainOp = r2_score(y_train_data, y_train_pred)
+        r2ValidOp = r2_score(y_valid_data, y_valid_pred)
 
         if len(y_test_data) > 0:
-            y_test_op = []
-            y_test_imp = []
-            for i in range(len(y_test_data)):
-                y_test_op.append(y_test_data[i][0])
-                y_test_imp.append(y_test_data[i][1])
-            y_test_pred_op = []
-            y_test_pred_imp = []
-            for i in range(len(y_test_pred)):
-                y_test_pred_op.append(y_test_pred[i][0])
-                y_test_pred_imp.append(y_test_pred[i][1])
-
-            r2TestOp = r2_score(y_test_op, y_test_pred_op)
-            r2TestImp = r2_score(y_test_imp, y_test_pred_imp)
+            r2TestOp = r2_score(y_test_data, y_test_pred)
         else:
             r2TestOp = 0
-            r2TestImp = 0
 
         fig, axs = plt.subplots(2, 2, figsize=(12, 12))
         title = 'Sensors' + 'Height'
@@ -200,27 +162,21 @@ class PukyongMachineLearner:
         for j in range(datasize):
             x_display_test[j][0] = j
 
-        axs[0, 0].scatter(x_display_train, y_train_op, color="red", s=1)
-        axs[0, 0].scatter(x_display_train, y_train_pred_op, color='blue', s=1)
-        axs[0, 0].scatter(x_display_train, y_train_imp, color="green", s=1)
-        axs[0, 0].scatter(x_display_train, y_train_pred_imp, color='black', s=1)
-        title = f'Train Data R2 (Op = {r2TrainOp}, Imp = {r2TrainImp})'
+        axs[0, 0].scatter(x_display_train, y_train_data, color="red", s=1)
+        axs[0, 0].scatter(x_display_train, y_train_pred, color='blue', s=1)
+        title = f'Train Data R2 (Op = {r2TrainOp})'
         axs[0, 0].set_title(title)
         axs[0, 0].grid()
 
-        axs[0, 1].scatter(x_display_valid, y_valid_op, color="red", s=1)
-        axs[0, 1].scatter(x_display_valid, y_valid_pred_op, color='blue', s=1)
-        axs[0, 1].scatter(x_display_valid, y_valid_imp, color="green", s=1)
-        axs[0, 1].scatter(x_display_valid, y_valid_pred_imp, color='black', s=1)
-        title = f'Validation Data R2 (Op = {r2ValidOp}, Imp = {r2ValidImp})'
+        axs[0, 1].scatter(x_display_valid, y_valid_data, color="red", s=1)
+        axs[0, 1].scatter(x_display_valid, y_valid_pred, color='blue', s=1)
+        title = f'Validation Data R2 (Op = {r2ValidOp})'
         axs[0, 1].set_title(title)
         axs[0, 1].grid()
 
-        axs[1, 0].scatter(x_display_test, y_test_op, color="red", s=1)
-        axs[1, 0].scatter(x_display_test, y_test_pred_op, color='blue', s=1)
-        axs[1, 0].scatter(x_display_test, y_test_imp, color="green", s=1)
-        axs[1, 0].scatter(x_display_test, y_test_pred_imp, color='black', s=1)
-        title = f'Test Data R2 (Op = {r2TestOp}, Imp = {r2TestImp})'
+        axs[1, 0].scatter(x_display_test, y_test_data, color="red", s=1)
+        axs[1, 0].scatter(x_display_test, y_test_pred, color='blue', s=1)
+        title = f'Test Data R2 (Op = {r2TestOp})'
         axs[1, 0].set_title(title)
         axs[1, 0].grid()
 
@@ -274,7 +230,6 @@ class LayerDlg(QDialog):
 
 class PukyongMLWindow(QMainWindow):
     N_FEATURE = 3
-    COL_WIDTH_PER_ONE_SENSOR = 6
 
     def __init__(self):
         super().__init__()
@@ -1706,9 +1661,9 @@ class PukyongMLWindow(QMainWindow):
         x_data[1] = dist
         x_data[2] = barrierPos
 
-        y_data = np.zeros(2)
+        y_data = np.zeros(1)
         y_data[0] = op_n
-        y_data[1] = imp_n
+        y_data[0] = imp_n
 
         return x_data, y_data
 
